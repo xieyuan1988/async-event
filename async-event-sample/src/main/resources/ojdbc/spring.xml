@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans-3.0.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd"
+       default-autowire="byName">
+
+
+    <context:property-placeholder location="classpath:ojdbc/db.properties" />
+
+    <bean name="dataSource" class="com.alibaba.druid.pool.DruidDataSource"  init-method="init" destroy-method="close">
+        <!-- 数据库基本信息配置 -->
+        <property name="driverClassName" value="${jdbc.driver}" />
+        <property name="url" value="${jdbc.url}" />
+        <property name="username" value="${jdbc.username}" />
+        <property name="password" value="${jdbc.password}" />
+    </bean>
+
+
+    <bean name="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <property name="dataSource" ref="dataSource"/>
+    </bean>
+
+    <bean name="sqlSessionTemplate" class="org.mybatis.spring.SqlSessionTemplate">
+        <constructor-arg ref="sqlSessionFactory"/>
+    </bean>
+
+    <bean id="storage" class="org.mybatis.spring.mapper.MapperFactoryBean">
+        <property name="mapperInterface" value="com.cubbery.event.storage.OracleEventStorage"/>
+        <property name="sqlSessionTemplate" ref="sqlSessionTemplate"/>
+    </bean>
+
+    <bean id="channel" class="com.cubbery.event.channel.PersistentChannel">
+        <constructor-arg index="0" value="1024"/>
+        <constructor-arg index="1" ref="storage"/>
+    </bean>
+
+    <bean id="eventBus" class="com.cubbery.event.EventBus">
+        <constructor-arg name="channel" ref="channel"></constructor-arg>
+        <property name="retryService" ref="retryService"></property>
+    </bean>
+    <bean id="retryService" class="com.cubbery.event.retry.RetryService">
+        <constructor-arg name="eventBus" ref="eventBus"/>
+        <constructor-arg name="leasePeriod" value="60"/>
+        <constructor-arg name="masterWaitCount" value="2"/>
+        <constructor-arg name="priority" value="10"/>
+        <constructor-arg name="retryCount" value="3"/>
+    </bean>
+
+    <bean class="com.cubbery.event.EventBusSpring" init-method="start" destroy-method="stop">
+        <constructor-arg ref="eventBus"/>
+        <constructor-arg name="subscribers">
+            <list>
+                <bean class="com.cubbery.event.sample.event.AnnotationSub"></bean>
+                <bean class="com.cubbery.event.sample.event.ListenerSub"></bean>
+            </list>
+        </constructor-arg>
+    </bean>
+</beans>
